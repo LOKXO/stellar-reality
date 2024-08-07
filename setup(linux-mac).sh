@@ -13,7 +13,6 @@ cd stellar_reality
 
 # Add dependencies to Cargo.toml
 echo "
-[dependencies]
 rand = \"0.8.5\"
 termion = \"1.5.6\"
 " >> Cargo.toml

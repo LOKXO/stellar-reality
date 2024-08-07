@@ -1,4 +1,5 @@
 use rand::Rng;
+use rand::seq::SliceRandom;
 use std::collections::HashMap;
 use std::io::{self, Write};
 use std::time::{Duration, Instant};
@@ -140,27 +141,37 @@ impl Colony {
     }
 
     fn update(&mut self) {
+        // Update resource amounts
         for (_, resource) in self.resources.iter_mut() {
             resource.amount += resource.production_rate - resource.consumption_rate;
             resource.amount = resource.amount.max(0.0);
         }
 
-        let food = self.resources.get_mut("Food").unwrap();
-        let water = self.resources.get_mut("Water").unwrap();
-        let food_consumed = self.population.min(food.amount);
-        let water_consumed = self.population.min(water.amount);
-        food.amount -= food_consumed;
-        water.amount -= water_consumed;
+        // Population consumes food and water
+        let food_amount = self.resources.get("Food").unwrap().amount;
+        let water_amount = self.resources.get("Water").unwrap().amount;
+        let food_consumed = self.population.min(food_amount);
+        let water_consumed = self.population.min(water_amount);
 
+        if let Some(food) = self.resources.get_mut("Food") {
+            food.amount -= food_consumed;
+        }
+        if let Some(water) = self.resources.get_mut("Water") {
+            water.amount -= water_consumed;
+        }
+
+        // Update population
         let growth_rate = if food_consumed >= self.population && water_consumed >= self.population { 0.01 } else { -0.01 };
         self.population += self.population * growth_rate;
         self.population = self.population.max(0.0);
 
+        // Update happiness
         let food_ratio = food_consumed / self.population;
         let water_ratio = water_consumed / self.population;
         self.happiness += (food_ratio + water_ratio - 1.0) * 5.0;
         self.happiness = self.happiness.clamp(0.0, 100.0);
 
+        // Generate tech points
         self.tech_points += 0.1 * self.population * (self.happiness / 100.0);
 
         self.day += 1;
@@ -169,6 +180,7 @@ impl Colony {
     fn build(&mut self, building_name: &str) -> Result<(), String> {
         let building = self.buildings.get_mut(building_name).ok_or("Building not found")?;
         
+        // Check if we have enough resources to build
         for (resource, cost) in &building.construction_cost {
             let available = self.resources.get(resource).map(|r| r.amount).unwrap_or(0.0);
             if available < *cost {
@@ -176,14 +188,15 @@ impl Colony {
             }
         }
 
+        // Deduct construction costs
         for (resource, cost) in &building.construction_cost {
             if let Some(r) = self.resources.get_mut(resource) {
                 r.amount -= cost;
             }
         }
 
+        // Increase building quantity and update resource rates
         building.quantity += 1;
-
         for (resource, rate) in &building.resource_production {
             if let Some(r) = self.resources.get_mut(resource) {
                 r.production_rate += rate;
@@ -240,7 +253,6 @@ fn main() -> io::Result<()> {
     let mut colony = Colony::new();
     let mut rng = rand::thread_rng();
 
-    let stdin = io::stdin();
     let mut stdout = io::stdout().into_raw_mode()?;
 
     write!(stdout, "{}{}", termion::clear::All, termion::cursor::Hide)?;
@@ -256,6 +268,7 @@ fn main() -> io::Result<()> {
 
         draw_ui(&colony, &mut stdout)?;
 
+        let stdin = io::stdin();
         if let Some(Ok(key)) = stdin.keys().next() {
             match key {
                 Key::Char('q') => break,
@@ -336,38 +349,38 @@ fn draw_ui(colony: &Colony, stdout: &mut termion::raw::RawTerminal<io::Stdout>) 
 }
 
 fn random_event(colony: &mut Colony, rng: &mut rand::rngs::ThreadRng) -> String {
-    let events = [
-        ("Solar Flare", |c: &mut Colony| {
+    let events: [(&str, Box<dyn Fn(&mut Colony) -> &str>); 7] = [
+        ("Solar Flare", Box::new(|c: &mut Colony| {
             c.resources.get_mut("Energy").unwrap().amount *= 1.5;
             "A solar flare has increased energy production!"
-        }),
-        ("Meteor Strike", |c: &mut Colony| {
+        })),
+        ("Meteor Strike", Box::new(|c: &mut Colony| {
             c.resources.get_mut("Minerals").unwrap().amount += 100.0;
             "A meteor strike has yielded additional minerals!"
-        }),
-        ("Disease Outbreak", |c: &mut Colony| {
+        })),
+        ("Disease Outbreak", Box::new(|c: &mut Colony| {
             c.population *= 0.9;
             c.happiness -= 10.0;
             "A disease outbreak has reduced the population and happiness."
-        }),
-        ("Technological Breakthrough", |c: &mut Colony| {
+        })),
+        ("Technological Breakthrough", Box::new(|c: &mut Colony| {
             c.tech_points += 50.0;
             "A technological breakthrough has yielded additional tech points!"
-        }),
-        ("Alien Artifact Discovered", |c: &mut Colony| {
+        })),
+        ("Alien Artifact Discovered", Box::new(|c: &mut Colony| {
             c.tech_points += 100.0;
             c.happiness += 5.0;
             "An alien artifact has been discovered, boosting research and morale!"
-        }),
-        ("Water Source Found", |c: &mut Colony| {
+        })),
+        ("Water Source Found", Box::new(|c: &mut Colony| {
             c.resources.get_mut("Water").unwrap().amount += 200.0;
             "A new water source has been discovered!"
-        }),
-        ("Volunteer Program", |c: &mut Colony| {
+        })),
+        ("Volunteer Program", Box::new(|c: &mut Colony| {
             c.happiness += 15.0;
             c.population *= 1.05;
             "A successful volunteer program has boosted happiness and attracted new colonists!"
-        }),
+        })),
     ];
 
     let (name, event) = events.choose(rng).unwrap();
