@@ -166,8 +166,8 @@ impl Colony {
         self.population = self.population.max(0.0);
 
         // Update happiness
-        let food_ratio = food_consumed / self.population;
-        let water_ratio = water_consumed / self.population;
+        let food_ratio = food_consumed / self.population.max(1.0);
+        let water_ratio = water_consumed / self.population.max(1.0);
         self.happiness += (food_ratio + water_ratio - 1.0) * 5.0;
         self.happiness = self.happiness.clamp(0.0, 100.0);
 
@@ -249,16 +249,25 @@ impl Colony {
     }
 }
 
+enum InputMode {
+    Normal,
+    Build(String),
+    Research(String),
+}
+
 fn main() -> io::Result<()> {
     let mut colony = Colony::new();
     let mut rng = rand::thread_rng();
 
     let mut stdout = io::stdout().into_raw_mode()?;
+    let stdin = io::stdin();
+    let mut keys = stdin.keys();
 
     write!(stdout, "{}{}", termion::clear::All, termion::cursor::Hide)?;
     stdout.flush()?;
 
     let mut last_update = Instant::now();
+    let mut input_mode = InputMode::Normal;
 
     loop {
         if last_update.elapsed() >= Duration::from_millis(500) {
@@ -266,35 +275,32 @@ fn main() -> io::Result<()> {
             last_update = Instant::now();
         }
 
-        draw_ui(&colony, &mut stdout)?;
+        draw_ui(&colony, &mut stdout, &input_mode)?;
 
-        let stdin = io::stdin();
-        if let Some(Ok(key)) = stdin.keys().next() {
-            match key {
-                Key::Char('q') => break,
-                Key::Char('b') => {
-                    write!(stdout, "{}Enter building name to construct: ", termion::cursor::Goto(1, 28))?;
-                    stdout.flush()?;
-                    let mut input = String::new();
-                    io::stdin().read_line(&mut input)?;
-                    let building_name = input.trim();
-                    match colony.build(building_name) {
-                        Ok(_) => colony.events.push(format!("Building {} constructed successfully!", building_name)),
-                        Err(e) => colony.events.push(format!("Error: {}", e)),
-                    }
+        if let Some(Ok(key)) = keys.next() {
+            match input_mode {
+                InputMode::Normal => match key {
+                    Key::Char('q') => break,
+                    Key::Char('b') => input_mode = InputMode::Build(String::new()),
+                    Key::Char('r') => input_mode = InputMode::Research(String::new()),
+                    _ => {}
                 },
-                Key::Char('r') => {
-                    write!(stdout, "{}Enter research name: ", termion::cursor::Goto(1, 28))?;
-                    stdout.flush()?;
-                    let mut input = String::new();
-                    io::stdin().read_line(&mut input)?;
-                    let research_name = input.trim();
-                    match colony.research(research_name) {
-                        Ok(_) => colony.events.push(format!("Research {} completed successfully!", research_name)),
-                        Err(e) => colony.events.push(format!("Error: {}", e)),
-                    }
+                InputMode::Build(ref mut input) => {
+                    handle_input(key, input, &mut input_mode, |name| {
+                        match colony.build(name) {
+                            Ok(_) => colony.events.push(format!("Building {} constructed successfully!", name)),
+                            Err(e) => colony.events.push(format!("Error: {}", e)),
+                        }
+                    });
                 },
-                _ => {}
+                InputMode::Research(ref mut input) => {
+                    handle_input(key, input, &mut input_mode, |name| {
+                        match colony.research(name) {
+                            Ok(_) => colony.events.push(format!("Research {} completed successfully!", name)),
+                            Err(e) => colony.events.push(format!("Error: {}", e)),
+                        }
+                    });
+                },
             }
         }
 
@@ -310,9 +316,28 @@ fn main() -> io::Result<()> {
     Ok(())
 }
 
-fn draw_ui(colony: &Colony, stdout: &mut termion::raw::RawTerminal<io::Stdout>) -> io::Result<()> {
+fn handle_input<F>(key: Key, input: &mut String, input_mode: &mut InputMode, action: F)
+where
+    F: FnOnce(&str),
+{
+    match key {
+        Key::Char('\n') => {
+            let name = input.trim();
+            if !name.is_empty() {
+                action(name);
+            }
+            *input_mode = InputMode::Normal;
+        }
+        Key::Char(c) => input.push(c),
+        Key::Backspace => { input.pop(); }
+        Key::Esc => *input_mode = InputMode::Normal,
+        _ => {}
+    }
+}
+
+fn draw_ui(colony: &Colony, stdout: &mut termion::raw::RawTerminal<io::Stdout>, input_mode: &InputMode) -> io::Result<()> {
     write!(stdout, "{}", termion::clear::All)?;
-    write!(stdout, "{}Stellar Exodus - Day {}", termion::cursor::Goto(1, 1), colony.day)?;
+    write!(stdout, "{}Stellar Reality - Day {}", termion::cursor::Goto(1, 1), colony.day)?;
     write!(stdout, "{}Population: {:.0} | Happiness: {:.1}%", termion::cursor::Goto(1, 2), colony.population, colony.happiness)?;
     write!(stdout, "{}Tech Points: {:.1}", termion::cursor::Goto(1, 3), colony.tech_points)?;
 
@@ -344,7 +369,18 @@ fn draw_ui(colony: &Colony, stdout: &mut termion::raw::RawTerminal<io::Stdout>) 
         write!(stdout, "{}{}", termion::cursor::Goto(1, 23 + i as u16), event)?;
     }
 
-    write!(stdout, "{}Commands: (b) Build, (r) Research, (q) Quit", termion::cursor::Goto(1, 27))?;
+    match input_mode {
+        InputMode::Normal => {
+            write!(stdout, "{}Commands: (b) Build, (r) Research, (q) Quit", termion::cursor::Goto(1, 27))?;
+        }
+        InputMode::Build(input) => {
+            write!(stdout, "{}Enter building name to construct: {}", termion::cursor::Goto(1, 27), input)?;
+        }
+        InputMode::Research(input) => {
+            write!(stdout, "{}Enter research name: {}", termion::cursor::Goto(1, 27), input)?;
+        }
+    }
+
     Ok(())
 }
 
