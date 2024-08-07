@@ -15,18 +15,20 @@ Stellar Reality is a text-based colony management game set in space. Manage reso
 ## Installation
 
 1. Make sure you have Rust installed on your system. If not, you can install it from [https://www.rust-lang.org/](https://www.rust-lang.org/).
+   
+2. Run the .bat or .sh file and copy main.rs into stellar_reality/src
 
-2. Clone this repository:
-   ```
-   git clone https://github.com/yourusername/stellar-reality.git
-   cd stellar-reality
-   ```
+3. go to the directory
+  ```
+  cd stellar_reality
+  ```
 
-3. Build and run the game:
+4. Build and run the game:
    ```
    cargo run
    ```
 
+<h6>report any issues using the issues tab or dm me in discord : realuser106</h6>
 ## How to Play
 
 - Use the keyboard to interact with the game:
