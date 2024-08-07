@@ -1,5 +1,5 @@
 <h1>PLEASE REPORT ANY ISSUES</h1>
-```markdown
+
 # Stellar Reality
 
 Stellar Reality is a text-based colony management game set in space. Manage resources, construct buildings, research technologies, and deal with random events as you strive to build a thriving space colony.
