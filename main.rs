@@ -286,20 +286,22 @@ fn main() -> io::Result<()> {
                     _ => {}
                 },
                 InputMode::Build(ref mut input) => {
-                    handle_input(key, input, &mut input_mode, |name| {
-                        match colony.build(name) {
-                            Ok(_) => colony.events.push(format!("Building {} constructed successfully!", name)),
+                    if handle_input(key, input) {
+                        match colony.build(input) {
+                            Ok(_) => colony.events.push(format!("Building {} constructed successfully!", input)),
                             Err(e) => colony.events.push(format!("Error: {}", e)),
                         }
-                    });
+                        input_mode = InputMode::Normal;
+                    }
                 },
                 InputMode::Research(ref mut input) => {
-                    handle_input(key, input, &mut input_mode, |name| {
-                        match colony.research(name) {
-                            Ok(_) => colony.events.push(format!("Research {} completed successfully!", name)),
+                    if handle_input(key, input) {
+                        match colony.research(input) {
+                            Ok(_) => colony.events.push(format!("Research {} completed successfully!", input)),
                             Err(e) => colony.events.push(format!("Error: {}", e)),
                         }
-                    });
+                        input_mode = InputMode::Normal;
+                    }
                 },
             }
         }
@@ -316,22 +318,19 @@ fn main() -> io::Result<()> {
     Ok(())
 }
 
-fn handle_input<F>(key: Key, input: &mut String, input_mode: &mut InputMode, action: F)
-where
-    F: FnOnce(&str),
-{
+fn handle_input(key: Key, input: &mut String) -> bool {
     match key {
-        Key::Char('\n') => {
-            let name = input.trim();
-            if !name.is_empty() {
-                action(name);
-            }
-            *input_mode = InputMode::Normal;
-        }
-        Key::Char(c) => input.push(c),
-        Key::Backspace => { input.pop(); }
-        Key::Esc => *input_mode = InputMode::Normal,
-        _ => {}
+        Key::Char('\n') => true,
+        Key::Char(c) => {
+            input.push(c);
+            false
+        },
+        Key::Backspace => {
+            input.pop();
+            false
+        },
+        Key::Esc => true,
+        _ => false,
     }
 }
 
